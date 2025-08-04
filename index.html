@@ -112,7 +112,7 @@
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
 
-        const successWords = ["成功","スペシャル", "決定的成功",  "レギュラー成功", "ハード成功", "イクストリーム成功", "クリティカル"];
+        const successWords = ["成功", "スペシャル", "決定的成功",  "レギュラー成功", "ハード成功", "イクストリーム成功", "クリティカル"];
         const lines = doc.querySelectorAll("p");
 
         const skillCounts = {}; // { プレイヤー名: { skill: 回数 } }
@@ -131,7 +131,7 @@
 
           const speaker = speakerRaw.replace(/\s*\(.*?\)/, "");
 
-          const isRelevantLog = skillMatch || logText.includes("クリティカル") || logText.includes("ファンブル");
+          const isRelevantLog = skillMatch || logText.includes("決定的成功", "クリティカル") || logText.includes("致命的失敗", "ファンブル");
           if (!isRelevantLog) return;
 
           if (!skillCounts[speaker]) skillCounts[speaker] = {};
@@ -198,4 +198,5 @@
     </p>
   </body>
 </html>
+
 
