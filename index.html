@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoC成長チェック抽出ツール</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: auto;
+            padding: 1em;
+        }
+        span {
+            display: inline-block;
+        }
+
+        .dropzone {
+            border: 2px dashed #aaa;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+        .output {
+        background: #f0f0f0;
+        padding: 1em;
+        white-space: pre-wrap;
+        border: 1px solid #ccc;
+        }
+        .copy-button {
+        margin: 10px 0;
+        padding: 5px 10px;
+        cursor: pointer;
+        background-color: #309898;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        }
+
+      @media screen and (max-width: 600px) {
+        body {
+          font-size: 0.9em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h2>CoC成長チェック抽出ツール</h2>
+    <p>
+      クトゥルフ神話TRPG、新クトゥルフ神話TRPGの両方に対応しています。<br>
+      自分用なので現在は最低限の機能しかありません。
+    </p>
+    <div class="dropzone" id="dropzone">
+      <span>ここにココフォリアの<span>ログファイルを</span><span>ドラッグ＆ドロップ</span><br>
+      またはクリックしてファイルを選択
+      <input type="file" id="fileInput" accept=".html" style="display: none;">
+    </div>
+
+    <button class="copy-button" onclick="copyOutput()">結果をコピー</button>
+    <div class="output" id="outputArea">ここに結果が表示されます</div>
+
+    <script>
+      const dropzone = document.getElementById("dropzone");
+      const fileInput = document.getElementById("fileInput");
+      const outputArea = document.getElementById("outputArea");
+
+      const skillOrder = [
+        "回避", "キック", "組み付き", "こぶし（パンチ）", "頭突き", "近接戦闘", "投擲", "マーシャルアーツ",
+        "射撃", "拳銃", "サブマシンガン", "ショットガン", "マシンガン", "ライフル",
+        "応急手当", "鍵開け", "隠す", "隠れる", "手さばき", "聞き耳", "忍び歩き", "隠密", "写真術", "精神分析",
+        "追跡", "登攀", "図書館", "目星", "鑑定", "運転", "機械修理", "重機械操作", "乗馬", "水泳", "製作",
+        "操縦", "跳躍", "電気修理", "ナビゲート", "変装", "言いくるめ", "信用", "説得", "値切り", "母国語",
+        "威圧", "魅惑", "言語", "医学", "オカルト", "化学",  "芸術", "経理", "考古学", "コンピューター",
+        "科学", "心理学", "人類学", "生物学", "地質学", "電子工学", "天文学", "博物学", "物理学", "自然", "法律", "薬学", "歴史", "サバイバル"
+      ];
+
+      const ignoreSkills = [
+        "STR", "CON", "POW", "DEX", "APP", "SIZ", "INT", "EDU",
+        "正気度ロール", "知識", "アイデア", "クトゥルフ神話"
+      ];
+
+      dropzone.addEventListener("click", () => fileInput.click());
+      dropzone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropzone.style.backgroundColor = "#eee";
+      });
+      dropzone.addEventListener("dragleave", () => {
+        dropzone.style.backgroundColor = "";
+      });
+      dropzone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropzone.style.backgroundColor = "";
+        const file = e.dataTransfer.files[0];
+        if (file) readFile(file);
+      });
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (file) readFile(file);
+      });
+
+      function readFile(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const html = reader.result;
+          parseLog(html);
+        };
+        reader.readAsText(file, "UTF-8");
+      }
+
+      function parseLog(html) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+
+        const successWords = ["成功","スペシャル", "決定的成功",  "レギュラー成功", "ハード成功", "イクストリーム成功", "クリティカル"];
+        const lines = doc.querySelectorAll("p");
+
+        const skillCounts = {}; // { プレイヤー名: { skill: 回数 } }
+        const critCounts = {}; // { プレイヤー名: 数 }
+        const fumbleCounts = {}; // { プレイヤー名: 数 }
+
+        lines.forEach(p => {
+          const spans = p.querySelectorAll("span");
+          if (spans.length < 3) return;
+
+          const speakerRaw = spans[1].textContent.trim();
+          const logText = spans[2].textContent.trim();
+          const skillMatch = logText.match(/【(.+?)】/);
+          const resultMatch = logText.match(/＞\s*([^＞\s]+)/g);
+          const finalResult = resultMatch ? resultMatch[resultMatch.length - 1].replace(/＞\s*/, "") : "";
+
+          const speaker = speakerRaw.replace(/\s*\(.*?\)/, "");
+
+          const isRelevantLog = skillMatch || logText.includes("クリティカル") || logText.includes("ファンブル");
+          if (!isRelevantLog) return;
+
+          if (!skillCounts[speaker]) skillCounts[speaker] = {};
+          if (!critCounts[speaker]) critCounts[speaker] = 0;
+          if (!fumbleCounts[speaker]) fumbleCounts[speaker] = 0;
+
+          if (logText.includes("致命的失敗", "ファンブル")) {
+            fumbleCounts[speaker]++;
+          }
+
+          if (logText.includes("決定的成功", "クリティカル")) {
+            critCounts[speaker]++;
+          }
+
+          if (skillMatch && successWords.includes(finalResult)) {
+            const skill = skillMatch[1];
+            if (ignoreSkills.some(kw => skill.includes(kw))) return;
+
+            if (!skillCounts[speaker][skill]) skillCounts[speaker][skill] = 0;
+            skillCounts[speaker][skill]++;
+          }
+        });
+
+        let output = "";
+          for (const speaker in skillCounts) {
+            output += `【${speaker}】\n`;
+            const skills = Object.entries(skillCounts[speaker]);
+            const matched = [];
+            const unmatched = [];
+            if (skills.length === 0 && critCounts[speaker] === 0 && fumbleCounts[speaker] === 0) continue;
+
+            for (const orderSkill of skillOrder) {
+              for (const [skill, count] of skills) {
+                if (skill.replace(/[（(].*?[)）]/g, "").startsWith(orderSkill)) {
+                  matched.push(`- ${skill}：${count}回`);
+                }
+              }
+            }
+            for (const [skill, count] of skills) {
+              if (!matched.some(m => m.includes(skill))) {
+                unmatched.push(`- ${skill}：${count}回`);
+              }
+            }
+
+            matched.forEach(line => output += line + "\n");
+            unmatched.forEach(line => output += line + "\n");
+            output += `C：${critCounts[speaker]}回　F：${fumbleCounts[speaker]}回\n\n`;
+          }
+
+          outputArea.textContent = output.trim();
+        }
+
+        function copyOutput() {
+          const text = outputArea.textContent;
+          navigator.clipboard.writeText(text).then(() => {
+            alert("結果をコピーしました！");
+          });
+        }
+
+    </script>
+    <p>
+      【更新履歴】<br>
+      2025年8月4日　仮公開
+    </p>
+  </body>
+</html>
