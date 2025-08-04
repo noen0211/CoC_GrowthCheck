@@ -131,18 +131,18 @@
 
           const speaker = speakerRaw.replace(/\s*\(.*?\)/, "");
 
-          const isRelevantLog = skillMatch || logText.includes("決定的成功", "クリティカル") || logText.includes("致命的失敗", "ファンブル");
+          const isRelevantLog = skillMatch || logText.includes("決定的成功") || logText.includes("クリティカル") || logText.includes("致命的失敗") || logText.includes("ファンブル");
           if (!isRelevantLog) return;
 
           if (!skillCounts[speaker]) skillCounts[speaker] = {};
           if (!critCounts[speaker]) critCounts[speaker] = 0;
           if (!fumbleCounts[speaker]) fumbleCounts[speaker] = 0;
 
-          if (logText.includes("致命的失敗", "ファンブル")) {
+          if (logText.includes("致命的失敗") || logText.includes("ファンブル")) {
             fumbleCounts[speaker]++;
           }
 
-          if (logText.includes("決定的成功", "クリティカル")) {
+          if (logText.includes("決定的成功") || logText.includes("クリティカル")) {
             critCounts[speaker]++;
           }
 
@@ -157,11 +157,12 @@
 
         let output = "";
           for (const speaker in skillCounts) {
-            output += `【${speaker}】\n`;
+            let tempOutput = `【${speaker}】\n`;
             const skills = Object.entries(skillCounts[speaker]);
             const matched = [];
             const unmatched = [];
-            if (skills.length === 0 && critCounts[speaker] === 0 && fumbleCounts[speaker] === 0) continue;
+            const totalSuccessCount = skills.reduce((sum, [, count]) => sum + count, 0);
+            if (totalSuccessCount === 0 && critCounts[speaker] === 0 && fumbleCounts[speaker] === 0) continue;
 
             for (const orderSkill of skillOrder) {
               for (const [skill, count] of skills) {
@@ -176,9 +177,12 @@
               }
             }
 
-            matched.forEach(line => output += line + "\n");
-            unmatched.forEach(line => output += line + "\n");
-            output += `C：${critCounts[speaker]}回　F：${fumbleCounts[speaker]}回\n\n`;
+            matched.forEach(line => tempOutput += line + "\n");
+            unmatched.forEach(line => tempOutput += line + "\n");
+            tempOutput += `C：${critCounts[speaker]}回　F：${fumbleCounts[speaker]}回\n\n`;
+
+            const hasContent = matched.length > 0 || unmatched.length > 0 || critCounts[speaker] > 0 || fumbleCounts[speaker] > 0;
+            if (hasContent) output += tempOutput;
           }
 
           outputArea.textContent = output.trim();
@@ -198,5 +202,4 @@
     </p>
   </body>
 </html>
-
 
